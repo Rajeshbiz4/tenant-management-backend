@@ -1,29 +1,75 @@
-var express = require("express");
-var bodyParser = require("body-parser");
-var port = 8080;
-var app = express();
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
-// const dotenv = require("dotenv");
-// dotenv.config();
-// var authenticateToken = require("./middleware/authenticateToken.js");
-// var user_controller = require("./modules/user/userController.js");
-// var auth_Controller = require("./modules/auth/authController.js");
-// var branch_Controller = require("./modules/branch/branchController.js");
-// var image_controller = require("./modules/images/imageController.js");
+dotenv.config();
 
-// app.use(bodyParser.urlencoded({ extended: false }));
-// app.use(bodyParser.json());
+const port = process.env.PORT || 8080;
+const app = express();
 
-// simple route
-app.get("/", (req, res) => {
-  res.json({ message: "Welcome to bezkoder application." });
+// Middleware - MUST be before routes
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+app.use(cors());
+
+// Custom JSON error handler (catches parse errors)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('❌ Bad JSON received:', err.body);
+    return res.status(400).json({ 
+      error: true, 
+      message: 'Invalid JSON format',
+      details: 'Please send valid JSON with properly quoted keys and values'
+    });
+  }
+  next(err);
 });
 
-app.use("/login", auth_Controller);
-app.use("/user", user_controller);
-app.use("/branch", branch_Controller);
-app.use("/images", image_controller);
+// Routes
+const authenticateToken = require('./middleware/authenticateToken');
+const userController = require('./modules/user/userController');
+const PropertyController = require('./modules/Property/PropertyController');
+const unitController = require('./modules/UNIT/unitController');
+
+// Health check
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Welcome to Tenant Management System API',
+    version: '1.0.0',
+    status: 'Running'
+  });
+});
+
+// Public routes
+app.use('/user', userController);
+app.use('/property', PropertyController);
+app.use('/unit', unitController);
+// Protected routes (uncomment when needed)
+// app.use('/branch', authenticateToken, branchController);
+// app.use('/images', authenticateToken, imageController);
+
+// serve swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// General Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('❌ Server Error:', err);
+  res.status(err.status || 500).json({ 
+    error: true, 
+    message: err.message || 'Internal server error',
+    type: err.type
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: true, message: 'Route not found' });
+});
 
 app.listen(port, () => {
-  console.log("Server listening on port " + port);
+  console.log(`✓ Server is running on port ${port}`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✓ API ready at http://localhost:${port}`);
 });
