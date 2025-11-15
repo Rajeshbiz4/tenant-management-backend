@@ -50,7 +50,13 @@ app.use('/unit', unitController);
 // app.use('/branch', authenticateToken, branchController);
 // app.use('/images', authenticateToken, imageController);
 
-// serve swagger UI
+// expose swagger JSON explicitly
+app.get('/api-docs/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
+// serve swagger UI (must be before catch-all / 404)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // General Error handling middleware
