@@ -52,12 +52,14 @@ app.use('/unit', unitController);
 
 // expose swagger JSON explicitly
 app.get('/api-docs/swagger.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Type','application/json');
   res.send(swaggerSpec);
 });
 
-// serve swagger UI (must be before catch-all / 404)
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// ensure swagger mounted here
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(null, {
+  swaggerOptions: { url: '/api-docs/swagger.json' }
+}));
 
 // General Error handling middleware
 app.use((err, req, res, next) => {
