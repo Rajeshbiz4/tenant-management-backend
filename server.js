@@ -50,10 +50,41 @@ app.use('/unit', unitController);
 // app.use('/branch', authenticateToken, branchController);
 // app.use('/images', authenticateToken, imageController);
 
-// expose swagger JSON explicitly
+// expose swagger JSON endpoint
 app.get('/api-docs/swagger.json', (req, res) => {
-  res.setHeader('Content-Type','application/json');
-  res.send(swaggerSpec);
+  res.type('application/json');
+  res.json(swaggerSpec);
+});
+
+// serve minimal HTML page that loads Swagger UI from CDN
+app.get('/api-docs', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Tenant Management API Docs</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui.css">
+      </head>
+      <body>
+        <div id="swagger-ui"></div>
+        <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-standalone-preset.js"></script>
+        <script>
+          window.onload = function() {
+            SwaggerUIBundle({
+              url: '/api-docs/swagger.json',
+              dom_id: '#swagger-ui',
+              presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+              layout: "StandaloneLayout",
+              deepLinking: true
+            });
+          }
+        </script>
+      </body>
+    </html>
+  `);
 });
 
 // ensure swagger mounted here
