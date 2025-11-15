@@ -76,8 +76,8 @@ app.use((req, res) => {
   res.status(404).json({ error: true, message: 'Route not found' });
 });
 
-app.listen(port, () => {
-  console.log(`✓ Server is running on port ${port}`);
-  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✓ API ready at http://localhost:${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`✓ Server is running on port ${port}`);
+//   console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+//   console.log(`✓ API ready at http://localhost:${port}`);
+// });
