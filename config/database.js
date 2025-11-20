@@ -1,13 +1,30 @@
+const mongoose = require('mongoose');
 const { MongoClient } = require('mongodb');
 const myLogModule = require('../utils/logger');
 
-const MONGODB_URI = "mongodb+srv://rajeshpandhare181:tY5SOl2JowgJaSW7@cluster0.adymsmg.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority" || process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://rajeshpandhare181:tY5SOl2JowgJaSW7@cluster0.adymsmg.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority" || 'mongodb://localhost:27017/tenant_management';
 const DB_NAME = process.env.DB_NAME || 'tenant_management';
 
 let _client = null;
 
 /**
- * Connect to MongoDB and return client
+ * Connect to MongoDB using Mongoose (for new models)
+ */
+const connectDB = async () => {
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    myLogModule.info('MongoDB connected successfully (Mongoose)');
+  } catch (error) {
+    myLogModule.error('MongoDB connection error: ' + error);
+    process.exit(1);
+  }
+};
+
+/**
+ * Connect to MongoDB and return client (for legacy native driver usage)
  * Reuses connection if already established
  */
 async function getClient() {
@@ -33,7 +50,7 @@ async function getClient() {
 }
 
 /**
- * Get database instance
+ * Get database instance (for legacy native driver usage)
  */
 async function getDatabase() {
   try {
@@ -62,6 +79,7 @@ async function closeDB() {
 }
 
 module.exports = {
+  connectDB,
   getClient,
   getDatabase,
   closeDB,

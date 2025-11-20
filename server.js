@@ -3,8 +3,12 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
+const { connectDB } = require('./config/database');
 
 dotenv.config();
+
+// Connect to MongoDB
+connectDB();
 
 const port = process.env.PORT || 8080;
 const app = express();
@@ -38,10 +42,10 @@ app.use((err, req, res, next) => {
 });
 
 // Routes
-const authenticateToken = require('./middleware/authenticateToken');
-const userController = require('./modules/user/userController');
-const PropertyController = require('./modules/Property/PropertyController');
-const unitController = require('./modules/UNIT/unitController');
+const authRoutes = require('./routes/authRoutes');
+const propertyRoutes = require('./routes/propertyRoutes');
+const tenantRoutes = require('./routes/tenantRoutes');
+const statsRoutes = require('./routes/statsRoutes');
 
 // Health check
 app.get('/', (req, res) => {
@@ -53,12 +57,12 @@ app.get('/', (req, res) => {
 });
 
 // Public routes
-app.use('/user', userController);
-app.use('/property', PropertyController);
-app.use('/unit', unitController);
-// Protected routes (uncomment when needed)
-// app.use('/branch', authenticateToken, branchController);
-// app.use('/images', authenticateToken, imageController);
+app.use('/auth', authRoutes);
+
+// Protected routes
+app.use('/properties', propertyRoutes);
+app.use('/tenant', tenantRoutes);
+app.use('/stats', statsRoutes);
 
 // expose swagger JSON endpoint
 app.get('/api-docs/swagger.json', (req, res) => {

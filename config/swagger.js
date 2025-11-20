@@ -5,9 +5,9 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title:  'Tenant Management API',
+      title: 'Tenant Management API',
       version: pkg.version || '1.0.0',
-      description: pkg.description || 'Complete API for managing properties, tenants, units and rental operations',
+      description: 'Complete API for managing properties, tenants, and rental operations with authentication',
       contact: {
         name: 'API Support',
         email: 'support@tenantmanagement.com'
@@ -33,7 +33,7 @@ const options = {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'JWT token for authentication'
+          description: 'JWT token for authentication. Include token in Authorization header without "Bearer" prefix.'
         }
       },
       schemas: {
@@ -57,113 +57,235 @@ const options = {
           type: 'object',
           properties: {
             page: { type: 'integer', example: 1 },
-            size: { type: 'integer', example: 10 },
+            limit: { type: 'integer', example: 10 },
             total: { type: 'integer', example: 100 },
             totalPages: { type: 'integer', example: 10 }
           }
         },
         User: {
           type: 'object',
-          required: ['firstName', 'lastName', 'mobile', 'userType'],
+          required: ['name', 'email', 'password'],
           properties: {
             _id: { type: 'string', format: 'ObjectId' },
-            firstName: { type: 'string', example: 'John' },
-            lastName: { type: 'string', example: 'Doe' },
-            mobile: { type: 'string', example: '9876543210' },
-            userType: { 
-              type: 'string', 
-              enum: ['tenant', 'owner', 'admin'],
-              example: 'tenant'
-            },
-            created_at: { type: 'string', format: 'date-time' },
-            updated_at: { type: 'string', format: 'date-time' }
+            name: { type: 'string', example: 'John Doe' },
+            email: { type: 'string', format: 'email', example: 'john@example.com' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['name', 'email', 'password'],
+          properties: {
+            name: { type: 'string', example: 'John Doe' },
+            email: { type: 'string', format: 'email', example: 'john@example.com' },
+            password: { type: 'string', format: 'password', minLength: 6, example: 'password123' }
+          }
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'john@example.com' },
+            password: { type: 'string', format: 'password', example: 'password123' }
+          }
+        },
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Login successful' },
+            data: {
+              type: 'object',
+              properties: {
+                token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+                user: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'ObjectId' },
+                    name: { type: 'string', example: 'John Doe' },
+                    email: { type: 'string', example: 'john@example.com' }
+                  }
+                }
+              }
+            }
           }
         },
         Property: {
           type: 'object',
-          required: ['buildingName', 'buildingAddress', 'pincode', 'state', 'userId'],
+          required: ['propertyType', 'area', 'location', 'monthlyRent'],
           properties: {
             _id: { type: 'string', format: 'ObjectId' },
-            buildingName: { type: 'string', example: 'Sunrise Apartments' },
-            buildingAddress: { type: 'string', example: '123 Main St' },
-            pincode: { type: 'string', example: '560001' },
-            state: { type: 'string', example: 'Karnataka' },
-            owner: { type: 'string' },
-            imageUrl: { type: 'string', format: 'uri' },
-            createdBy: { type: 'string', format: 'ObjectId' },
-            counts: {
-              type: 'object',
-              properties: {
-                flats: { type: 'integer', example: 24 },
-                shops: { type: 'integer', example: 2 },
-                halls: { type: 'integer', example: 1 },
-                plots: { type: 'integer', example: 0 }
-              }
-            },
-            created_at: { type: 'string', format: 'date-time' },
-            updated_at: { type: 'string', format: 'date-time' }
-          }
-        },
-        Unit: {
-          type: 'object',
-          required: ['propertyId', 'unitType', 'flatNo', 'area', 'rent'],
-          properties: {
-            _id: { type: 'string', format: 'ObjectId' },
-            propertyId: { type: 'string', format: 'ObjectId', example: '650f1a2b3c4d5e6f7a8b9c0d' },
-            unitType: { 
+            propertyType: { 
               type: 'string', 
-              enum: ['flat', 'shop', 'hall', 'plot'],
+              enum: ['flat', 'shop', 'plot'],
               example: 'flat'
             },
-            flatNo: { type: 'string', example: '101' },
             area: { type: 'number', example: 1200, description: 'Area in sq.ft' },
-            rent: { type: 'number', example: 25000, description: 'Monthly rent in Rs.' },
-            description: { type: 'string', example: '3 BHK apartment with balcony' },
-            rentalStatus: { 
+            location: { type: 'string', example: '123 Main Street, City' },
+            monthlyRent: { type: 'number', example: 25000, description: 'Monthly rent in Rs.' },
+            maintenance: { type: 'number', example: 5000, description: 'Monthly maintenance in Rs.', default: 0 },
+            lightBill: { type: 'number', example: 500, description: 'Monthly light bill in Rs.', default: 0 },
+            userId: { type: 'string', format: 'ObjectId' },
+            tenant: { 
               type: 'string', 
-              enum: ['available', 'rented'],
-              example: 'available'
+              format: 'ObjectId',
+              nullable: true,
+              description: 'Reference to tenant if property is occupied'
             },
-            maintenance: { type: 'number', example: 5000, description: 'Monthly maintenance in Rs.' },
-            lightBill: { type: 'number', example: 500, description: 'Monthly light bill in Rs.' },
-            rentObject: {
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        PropertyRequest: {
+          type: 'object',
+          required: ['propertyType', 'area', 'location', 'monthlyRent'],
+          properties: {
+            propertyType: { 
+              type: 'string', 
+              enum: ['flat', 'shop', 'plot'],
+              example: 'flat'
+            },
+            area: { type: 'number', example: 1200 },
+            location: { type: 'string', example: '123 Main Street, City' },
+            monthlyRent: { type: 'number', example: 25000 },
+            maintenance: { type: 'number', example: 5000 },
+            lightBill: { type: 'number', example: 500 }
+          }
+        },
+        Tenant: {
+          type: 'object',
+          required: ['name', 'phone', 'email', 'aadhar', 'startDate', 'propertyId'],
+          properties: {
+            _id: { type: 'string', format: 'ObjectId' },
+            name: { type: 'string', example: 'Jane Smith' },
+            phone: { type: 'string', example: '9876543210' },
+            email: { type: 'string', format: 'email', example: 'jane@example.com' },
+            aadhar: { type: 'string', example: '1234-5678-9012' },
+            startDate: { type: 'string', format: 'date', example: '2024-01-01' },
+            propertyId: { type: 'string', format: 'ObjectId' },
+            rentStatus: { 
+              type: 'string', 
+              enum: ['paid', 'pending'],
+              example: 'pending'
+            },
+            maintenanceStatus: { 
+              type: 'string', 
+              enum: ['paid', 'pending'],
+              example: 'pending'
+            },
+            lightBillStatus: { 
+              type: 'string', 
+              enum: ['paid', 'pending'],
+              example: 'pending'
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        TenantRequest: {
+          type: 'object',
+          required: ['name', 'phone', 'email', 'aadhar', 'startDate'],
+          properties: {
+            name: { type: 'string', example: 'Jane Smith' },
+            phone: { type: 'string', example: '9876543210' },
+            email: { type: 'string', format: 'email', example: 'jane@example.com' },
+            aadhar: { type: 'string', example: '1234-5678-9012' },
+            startDate: { type: 'string', format: 'date', example: '2024-01-01' }
+          }
+        },
+        StatusUpdateRequest: {
+          type: 'object',
+          required: ['rentStatus'],
+          properties: {
+            rentStatus: { 
+              type: 'string', 
+              enum: ['paid', 'pending'],
+              example: 'paid'
+            }
+          }
+        },
+        OverviewStats: {
+          type: 'object',
+          properties: {
+            totalProperties: { type: 'integer', example: 50 },
+            totalTenants: { type: 'integer', example: 35 },
+            pendingRent: { type: 'number', example: 875000 },
+            pendingMaintenance: { type: 'number', example: 175000 },
+            pendingLightBill: { type: 'number', example: 17500 }
+          }
+        },
+        MonthlyStats: {
+          type: 'object',
+          properties: {
+            year: { type: 'integer', example: 2024 },
+            month: { type: 'integer', example: 1 },
+            rent: {
               type: 'object',
               properties: {
-                tenantId: { type: 'string', format: 'ObjectId' },
-                tenantName: { type: 'string' },
-                rentStartDate: { type: 'string', format: 'date' },
-                rentEndDate: { type: 'string', format: 'date' },
-                securityDeposit: { type: 'number' }
+                collected: { type: 'number', example: 500000 },
+                pending: { type: 'number', example: 375000 }
               }
             },
-            features: { 
-              type: 'array', 
-              items: { type: 'string' },
-              example: ['balcony', 'parking', 'garden']
+            maintenance: {
+              type: 'object',
+              properties: {
+                collected: { type: 'number', example: 100000 },
+                pending: { type: 'number', example: 75000 }
+              }
             },
-            created_at: { type: 'string', format: 'date-time' },
-            updated_at: { type: 'string', format: 'date-time' }
+            lightBill: {
+              type: 'object',
+              properties: {
+                collected: { type: 'number', example: 10000 },
+                pending: { type: 'number', example: 7500 }
+              }
+            }
+          }
+        },
+        YearlyStats: {
+          type: 'object',
+          properties: {
+            year: { type: 'integer', example: 2024 },
+            totalCollection: { type: 'number', example: 6000000 },
+            monthlyBreakdown: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                properties: {
+                  rent: { type: 'number' },
+                  maintenance: { type: 'number' },
+                  lightBill: { type: 'number' },
+                  total: { type: 'number' }
+                }
+              }
+            }
           }
         }
       }
     },
     tags: [
       {
-        name: 'User',
-        description: 'User management endpoints (create, authenticate, update, delete)'
+        name: 'Auth',
+        description: 'Authentication endpoints (register, login, password reset)'
       },
       {
         name: 'Property',
-        description: 'Property management endpoints (create, list, get, update, delete)'
+        description: 'Property management endpoints (CRUD operations)'
       },
       {
-        name: 'Unit',
-        description: 'Unit/Flat management endpoints (create, list, get, update, delete)'
+        name: 'Tenant',
+        description: 'Tenant management endpoints (CRUD operations and status updates)'
+      },
+      {
+        name: 'Stats',
+        description: 'Statistics and dashboard endpoints'
       }
     ]
   },
   apis: [
-    './modules/**/*.js',
+    './controllers/**/*.js',
+    './routes/**/*.js',
     './server.js'
   ]
 };
