@@ -12,7 +12,17 @@ const app = express();
 // Middleware - MUST be before routes
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*', // Allow all origins by default, or set specific origin via env
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true, // Allow cookies and authentication headers
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+app.use(cors(corsOptions));
 
 // Custom JSON error handler (catches parse errors)
 app.use((err, req, res, next) => {
