@@ -52,10 +52,10 @@ const generateToken = (userId) => {
 // Register
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password , propertyName} = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: true, message: 'Name, email, and password are required' });
+    if (!name || !email || !password || !propertyName) {
+      return res.status(400).json({ error: true, message: 'Name, email, and password propertyName are required' });
     }
 
     if (password.length < 6) {
@@ -80,7 +80,8 @@ exports.register = async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          propertyName : user.propertyName
         }
       }
     });
