@@ -21,6 +21,16 @@ const propertySchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  shopName: {
+    type: String,
+    required: true,
+     trim: true
+  },
+  shopNumber: {
+    type: Number,
+    required: true,
+    min: 0
+  },
   maintenance: {
     type: Number,
     required: true,
