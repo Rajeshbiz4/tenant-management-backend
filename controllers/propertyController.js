@@ -40,10 +40,10 @@ const myLogModule = require('../utils/logger');
 // Create Property
 exports.createProperty = async (req, res) => {
   try {
-    const { propertyType, area, location, monthlyRent, maintenance, lightBill } = req.body;
+    const { propertyType, shopName, shopNumber, area, location, monthlyRent, maintenance, lightBill } = req.body;
     const userId = req.user.userId;
 
-    if (!propertyType || !area || !location || !monthlyRent) {
+    if (!propertyType || !area || !location || !monthlyRent || !shopName || !shopNumber) {
       return res.status(400).json({ error: true, message: 'Property type, area, location, and monthly rent are required' });
     }
 
@@ -54,6 +54,8 @@ exports.createProperty = async (req, res) => {
     const property = new Property({
       propertyType,
       area,
+      shopName,
+      shopNumber,
       location,
       monthlyRent,
       maintenance: maintenance || 0,
