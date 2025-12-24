@@ -1,4 +1,4 @@
-const Payment = require('../models/payment');
+const Payment = require('../models/Payment');
 const Property = require('../models/Property');
 const Tenant = require('../models/Tenant');
 const myLogModule = require('../utils/logger');
