@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const propertyController = require('../controllers/propertyController');
 const authenticateToken = require('../middleware/authenticateToken');
 
@@ -12,4 +13,3 @@ router.put('/:id', propertyController.updateProperty);
 router.delete('/:id', propertyController.deleteProperty);
 
 module.exports = router;
-

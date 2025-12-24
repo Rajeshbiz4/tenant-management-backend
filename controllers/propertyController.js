@@ -4,6 +4,112 @@ const myLogModule = require('../utils/logger');
 
 /**
  * @swagger
+ * components:
+ *   schemas:
+ *     Agreement:
+ *       type: object
+ *       properties:
+ *         startDate:
+ *           type: string
+ *           format: date
+ *         months:
+ *           type: number
+ *
+ *     Rent:
+ *       type: object
+ *       properties:
+ *         monthlyRent:
+ *           type: number
+ *         maintenance:
+ *           type: number
+ *         lastPaid:
+ *           type: string
+ *           format: date
+ *
+ *     Electricity:
+ *       type: object
+ *       properties:
+ *         submeterNo:
+ *           type: string
+ *         lastUnit:
+ *           type: number
+ *         unitRate:
+ *           type: number
+ *
+ *     PropertyRequest:
+ *       type: object
+ *       required:
+ *         - propertyType
+ *         - shopName
+ *         - shopNumber
+ *         - area
+ *         - location
+ *       properties:
+ *         propertyType:
+ *           type: string
+ *           enum: [flat, shop, plot]
+ *         shopName:
+ *           type: string
+ *         shopNumber:
+ *           type: string
+ *         area:
+ *           type: string
+ *         location:
+ *           type: string
+ *         agreement:
+ *           $ref: "#/components/schemas/Agreement"
+ *         rent:
+ *           $ref: "#/components/schemas/Rent"
+ *         electricity:
+ *           $ref: "#/components/schemas/Electricity"
+ *         isActive:
+ *           type: boolean
+ *
+ *     Property:
+ *       allOf:
+ *         - $ref: "#/components/schemas/PropertyRequest"
+ *         - type: object
+ *           properties:
+ *             _id:
+ *               type: string
+ *             userId:
+ *               type: string
+ *             createdAt:
+ *               type: string
+ *             updatedAt:
+ *               type: string
+ *
+ *     Pagination:
+ *       type: object
+ *       properties:
+ *         page:
+ *           type: number
+ *         limit:
+ *           type: number
+ *         total:
+ *           type: number
+ *         totalPages:
+ *           type: number
+ *
+ *     Error:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: boolean
+ *         message:
+ *           type: string
+ *
+ *     Success:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *         message:
+ *           type: string
+ */
+
+/**
+ * @swagger
  * /properties:
  *   post:
  *     summary: Create a new property
@@ -19,47 +125,46 @@ const myLogModule = require('../utils/logger');
  *     responses:
  *       201:
  *         description: Property created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   $ref: '#/components/schemas/Property'
  *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Missing required fields
  */
+
+// -------------------------------------
 // Create Property
+// -------------------------------------
 exports.createProperty = async (req, res) => {
   try {
-    const { propertyType, shopName, shopNumber, area, location, monthlyRent, maintenance, lightBill } = req.body;
     const userId = req.user.userId;
 
-    if (!propertyType || !area || !location || !monthlyRent || !shopName || !shopNumber) {
-      return res.status(400).json({ error: true, message: 'Property type, area, location, and monthly rent are required' });
-    }
+    const {
+      propertyType,
+      shopName,
+      shopNumber,
+      area,
+      location,
+      agreement,
+      rent,
+      electricity,
+      isActive
+    } = req.body;
 
-    if (!['flat', 'shop', 'plot'].includes(propertyType)) {
-      return res.status(400).json({ error: true, message: 'Property type must be flat, shop, or plot' });
+    if (!propertyType || !shopName || !shopNumber || !area || !location) {
+      return res.status(400).json({
+        error: true,
+        message: 'Missing required fields'
+      });
     }
 
     const property = new Property({
       propertyType,
-      area,
       shopName,
       shopNumber,
+      area,
       location,
-      monthlyRent,
-      maintenance: maintenance || 0,
-      lightBill: lightBill || 0,
+      agreement,
+      rent,
+      electricity,
+      isActive,
       userId
     });
 
@@ -70,9 +175,14 @@ exports.createProperty = async (req, res) => {
       message: 'Property created successfully',
       data: property
     });
+
   } catch (error) {
     myLogModule.error('Create property error: ' + error);
-    res.status(500).json({ error: true, message: 'Error creating property', details: error.message });
+    res.status(500).json({
+      error: true,
+      message: 'Error creating property',
+      details: error.message
+    });
   }
 };
 
@@ -80,66 +190,49 @@ exports.createProperty = async (req, res) => {
  * @swagger
  * /properties:
  *   get:
- *     summary: Get all properties with pagination and filters
+ *     summary: Get all properties with pagination & search
  *     tags: [Property]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: query
- *         name: page
+ *       - name: page
+ *         in: query
  *         schema:
- *           type: integer
- *           default: 1
- *         description: Page number
- *       - in: query
- *         name: limit
+ *           type: number
+ *       - name: limit
+ *         in: query
  *         schema:
- *           type: integer
- *           default: 10
- *         description: Items per page
- *       - in: query
- *         name: search
+ *           type: number
+ *       - name: search
+ *         in: query
  *         schema:
  *           type: string
  *         description: Search by location
- *       - in: query
- *         name: propertyType
+ *       - name: propertyType
+ *         in: query
  *         schema:
  *           type: string
  *           enum: [flat, shop, plot]
- *         description: Filter by property type
  *     responses:
  *       200:
- *         description: List of properties
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Property'
- *                 pagination:
- *                   $ref: '#/components/schemas/Pagination'
+ *         description: Property list fetched
  */
+
+// -------------------------------------
 // Get All Properties
+// -------------------------------------
 exports.getAllProperties = async (req, res) => {
   try {
     const userId = req.user.userId;
     const { page = 1, limit = 10, search, propertyType } = req.query;
 
     const filter = { userId };
-    if (search) {
-      filter.location = { $regex: search, $options: 'i' };
-    }
-    if (propertyType) {
-      filter.propertyType = propertyType;
-    }
+
+    if (search) filter.location = { $regex: search, $options: 'i' };
+    if (propertyType) filter.propertyType = propertyType;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const properties = await Property.find(filter)
       .populate('tenant')
       .skip(skip)
@@ -152,15 +245,20 @@ exports.getAllProperties = async (req, res) => {
       success: true,
       data: properties,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: Number(page),
+        limit: Number(limit),
         total,
-        totalPages: Math.ceil(total / parseInt(limit))
+        totalPages: Math.ceil(total / limit)
       }
     });
+
   } catch (error) {
     myLogModule.error('Get properties error: ' + error);
-    res.status(500).json({ error: true, message: 'Error fetching properties', details: error.message });
+    res.status(500).json({
+      error: true,
+      message: 'Error fetching properties',
+      details: error.message
+    });
   }
 };
 
@@ -173,49 +271,40 @@ exports.getAllProperties = async (req, res) => {
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
+ *       - name: id
+ *         in: path
  *         required: true
  *         schema:
  *           type: string
- *         description: Property ID
- *     responses:
- *       200:
- *         description: Property details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/Property'
- *       404:
- *         description: Property not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
+
+// -------------------------------------
 // Get Single Property
+// -------------------------------------
 exports.getProperty = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.userId;
 
-    const property = await Property.findOne({ _id: id, userId }).populate('tenant');
+    const property = await Property.findOne({ _id: id, userId })
+      .populate('tenant');
+
     if (!property) {
-      return res.status(404).json({ error: true, message: 'Property not found' });
+      return res.status(404).json({
+        error: true,
+        message: 'Property not found'
+      });
     }
 
-    res.json({
-      success: true,
-      data: property
-    });
+    res.json({ success: true, data: property });
+
   } catch (error) {
     myLogModule.error('Get property error: ' + error);
-    res.status(500).json({ error: true, message: 'Error fetching property', details: error.message });
+    res.status(500).json({
+      error: true,
+      message: 'Error fetching property',
+      details: error.message
+    });
   }
 };
 
@@ -228,51 +317,29 @@ exports.getProperty = async (req, res) => {
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
+ *       - name: id
+ *         in: path
  *         required: true
- *         schema:
- *           type: string
- *         description: Property ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/PropertyRequest'
- *     responses:
- *       200:
- *         description: Property updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       404:
- *         description: Property not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
+
+// -------------------------------------
 // Update Property
+// -------------------------------------
 exports.updateProperty = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.userId;
-    const { propertyType, area, location, monthlyRent, maintenance, lightBill } = req.body;
+    const data = req.body;
 
     const property = await Property.findOne({ _id: id, userId });
     if (!property) {
-      return res.status(404).json({ error: true, message: 'Property not found' });
+      return res.status(404).json({
+        error: true,
+        message: 'Property not found'
+      });
     }
 
-    if (propertyType) property.propertyType = propertyType;
-    if (area !== undefined) property.area = area;
-    if (location) property.location = location;
-    if (monthlyRent !== undefined) property.monthlyRent = monthlyRent;
-    if (maintenance !== undefined) property.maintenance = maintenance;
-    if (lightBill !== undefined) property.lightBill = lightBill;
-
+    Object.assign(property, data);
     await property.save();
 
     res.json({
@@ -280,9 +347,14 @@ exports.updateProperty = async (req, res) => {
       message: 'Property updated successfully',
       data: property
     });
+
   } catch (error) {
     myLogModule.error('Update property error: ' + error);
-    res.status(500).json({ error: true, message: 'Error updating property', details: error.message });
+    res.status(500).json({
+      error: true,
+      message: 'Error updating property',
+      details: error.message
+    });
   }
 };
 
@@ -295,27 +367,14 @@ exports.updateProperty = async (req, res) => {
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
+ *       - name: id
+ *         in: path
  *         required: true
- *         schema:
- *           type: string
- *         description: Property ID
- *     responses:
- *       200:
- *         description: Property deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       404:
- *         description: Property not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
+
+// -------------------------------------
 // Delete Property
+// -------------------------------------
 exports.deleteProperty = async (req, res) => {
   try {
     const { id } = req.params;
@@ -323,10 +382,12 @@ exports.deleteProperty = async (req, res) => {
 
     const property = await Property.findOne({ _id: id, userId });
     if (!property) {
-      return res.status(404).json({ error: true, message: 'Property not found' });
+      return res.status(404).json({
+        error: true,
+        message: 'Property not found'
+      });
     }
 
-    // Delete associated tenant if exists
     if (property.tenant) {
       await Tenant.findByIdAndDelete(property.tenant);
     }
@@ -337,9 +398,13 @@ exports.deleteProperty = async (req, res) => {
       success: true,
       message: 'Property deleted successfully'
     });
+
   } catch (error) {
     myLogModule.error('Delete property error: ' + error);
-    res.status(500).json({ error: true, message: 'Error deleting property', details: error.message });
+    res.status(500).json({
+      error: true,
+      message: 'Error deleting property',
+      details: error.message
+    });
   }
 };
-
