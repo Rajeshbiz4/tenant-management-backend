@@ -8,6 +8,7 @@ router.use(authenticateToken);
 router.get('/overview', statsController.getOverview);
 router.get('/monthly', statsController.getMonthlyStats);
 router.get('/yearly', statsController.getYearlyStats);
+router.get('/analytics', statsController.getAnalytics);
 
 module.exports = router;
 

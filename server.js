@@ -47,6 +47,7 @@ const propertyRoutes = require('./routes/propertyRoutes');
 const tenantRoutes = require('./routes/tenantRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const maintenanceRoutes = require('./routes/maintenanceRoutes');
 
 // Health check
 app.get('/', (req, res) => {
@@ -65,6 +66,7 @@ app.use('/properties', propertyRoutes);
 app.use('/tenant', tenantRoutes);
 app.use('/stats', statsRoutes);
 app.use('/payments', paymentRoutes);
+app.use('/maintenance', maintenanceRoutes);
 
 // expose swagger JSON endpoint
 app.get('/api-docs/swagger.json', (req, res) => {

@@ -1,5 +1,8 @@
+const mongoose = require('mongoose');
 const Property = require('../models/Property');
 const Tenant = require('../models/Tenant');
+const Payment = require('../models/Payment');
+const Maintenance = require('../models/Maintenance');
 const myLogModule = require('../utils/logger');
 
 /**
@@ -42,14 +45,23 @@ exports.getOverview = async (req, res) => {
     let pendingLightBill = 0;
 
     tenants.forEach(tenant => {
+      if (!tenant.propertyId) return;
+      
+      const property = tenant.propertyId;
+      const rentAmount = property.rent?.monthlyRent || property.monthlyRent || 0;
+      const maintenanceAmount = property.rent?.maintenance || property.maintenance || 0;
+      const lightBillAmount = property.electricity?.lastUnit && property.electricity?.unitRate
+        ? property.electricity.lastUnit * property.electricity.unitRate
+        : property.lightBill || 0;
+      
       if (tenant.rentStatus === 'pending') {
-        pendingRent += tenant.propertyId.monthlyRent || 0;
+        pendingRent += rentAmount;
       }
       if (tenant.maintenanceStatus === 'pending') {
-        pendingMaintenance += tenant.propertyId.maintenance || 0;
+        pendingMaintenance += maintenanceAmount;
       }
       if (tenant.lightBillStatus === 'pending') {
-        pendingLightBill += tenant.propertyId.lightBill || 0;
+        pendingLightBill += lightBillAmount;
       }
     });
 
@@ -118,9 +130,14 @@ exports.getMonthlyStats = async (req, res) => {
     };
 
     tenants.forEach(tenant => {
-      const rent = tenant.propertyId.monthlyRent || 0;
-      const maintenance = tenant.propertyId.maintenance || 0;
-      const lightBill = tenant.propertyId.lightBill || 0;
+      if (!tenant.propertyId) return;
+      
+      const property = tenant.propertyId;
+      const rent = property.rent?.monthlyRent || property.monthlyRent || 0;
+      const maintenance = property.rent?.maintenance || property.maintenance || 0;
+      const lightBill = property.electricity?.lastUnit && property.electricity?.unitRate
+        ? property.electricity.lastUnit * property.electricity.unitRate
+        : property.lightBill || 0;
 
       if (tenant.rentStatus === 'paid') {
         monthlyData.rent.collected += rent;
@@ -206,9 +223,14 @@ exports.getYearlyStats = async (req, res) => {
     }
 
     tenants.forEach(tenant => {
-      const rent = tenant.propertyId.monthlyRent || 0;
-      const maintenance = tenant.propertyId.maintenance || 0;
-      const lightBill = tenant.propertyId.lightBill || 0;
+      if (!tenant.propertyId) return;
+      
+      const property = tenant.propertyId;
+      const rent = property.rent?.monthlyRent || property.monthlyRent || 0;
+      const maintenance = property.rent?.maintenance || property.maintenance || 0;
+      const lightBill = property.electricity?.lastUnit && property.electricity?.unitRate
+        ? property.electricity.lastUnit * property.electricity.unitRate
+        : property.lightBill || 0;
 
       // For simplicity, we'll calculate based on current status
       // In a real app, you'd track monthly payments
@@ -244,6 +266,200 @@ exports.getYearlyStats = async (req, res) => {
   } catch (error) {
     myLogModule.error('Get yearly stats error: ' + error);
     res.status(500).json({ error: true, message: 'Error fetching yearly stats', details: error.message });
+  }
+};
+
+/**
+ * @swagger
+ * /stats/analytics:
+ *   get:
+ *     summary: Get analytics data (earnings, spends, pending rent)
+ *     tags: [Stats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: propertyId
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Analytics data
+ */
+// Analytics Stats - Earnings, Spends, Pending Rent
+exports.getAnalytics = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { year, month, propertyId } = req.query;
+
+    // Get user's properties
+    const properties = await Property.find({ userId });
+    const propertyIds = properties.map(p => p._id.toString());
+
+    // If no properties, return empty analytics
+    if (propertyIds.length === 0) {
+      const currentDate = new Date();
+      const currentYear = year ? parseInt(year) : currentDate.getFullYear();
+      const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+      
+      return res.json({
+        success: true,
+        data: {
+          period: {
+            year: currentYear,
+            month: currentMonth,
+            monthName: new Date(currentYear, currentMonth - 1, 1).toLocaleString('default', { month: 'long' })
+          },
+          earnings: {
+            total: 0,
+            byType: { rent: 0, maintenance: 0, light: 0, advance: 0 },
+            count: 0
+          },
+          spends: {
+            total: 0,
+            paid: 0,
+            pending: 0,
+            count: 0
+          },
+          pendingRent: {
+            total: 0,
+            count: 0,
+            details: []
+          },
+          netAmount: 0,
+          profitMargin: 0
+        }
+      });
+    }
+
+    // Build filters
+    const paymentFilter = { 
+      property: { $in: propertyIds.map(id => new mongoose.Types.ObjectId(id)) }
+    };
+    const maintenanceFilter = { 
+      property: { $in: propertyIds.map(id => new mongoose.Types.ObjectId(id)) }
+    };
+
+    if (propertyId && propertyIds.includes(propertyId)) {
+      paymentFilter.property = new mongoose.Types.ObjectId(propertyId);
+      maintenanceFilter.property = new mongoose.Types.ObjectId(propertyId);
+    }
+
+    // Filter by year/month for payments
+    if (year) {
+      paymentFilter.year = parseInt(year);
+      if (month) {
+        paymentFilter.month = parseInt(month);
+      }
+    } else {
+      // Default to current month if no year specified
+      const now = new Date();
+      paymentFilter.year = now.getFullYear();
+      paymentFilter.month = now.getMonth() + 1;
+    }
+
+    // Filter by year/month for maintenance (using activityDate)
+    if (year) {
+      const startDate = new Date(parseInt(year), month ? parseInt(month) - 1 : 0, 1);
+      const endDate = new Date(parseInt(year), month ? parseInt(month) : 12, 0, 23, 59, 59);
+      maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
+    } else {
+      // Default to current month
+      const now = new Date();
+      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
+    }
+
+    // Calculate Total Earnings from Payments
+    const payments = await Payment.find(paymentFilter);
+    const totalEarnings = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    
+    // Breakdown by type
+    const earningsByType = {
+      rent: payments.filter(p => p.type === 'rent').reduce((sum, p) => sum + (p.amount || 0), 0),
+      maintenance: payments.filter(p => p.type === 'maintenance').reduce((sum, p) => sum + (p.amount || 0), 0),
+      light: payments.filter(p => p.type === 'light').reduce((sum, p) => sum + (p.amount || 0), 0),
+      advance: payments.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0),
+    };
+
+    // Calculate Total Spends from Maintenance
+    const maintenanceRecords = await Maintenance.find(maintenanceFilter);
+    const totalSpends = maintenanceRecords.reduce((sum, m) => sum + (m.amount || 0), 0);
+    const paidSpends = maintenanceRecords
+      .filter(m => m.status === 'paid')
+      .reduce((sum, m) => sum + (m.amount || 0), 0);
+    const pendingSpends = maintenanceRecords
+      .filter(m => m.status === 'pending')
+      .reduce((sum, m) => sum + (m.amount || 0), 0);
+
+    // Calculate Pending Rent for Current Month
+    const currentDate = new Date();
+    const currentYear = year ? parseInt(year) : currentDate.getFullYear();
+    const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+
+    const tenants = await Tenant.find({
+      propertyId: { $in: propertyIds.map(id => new mongoose.Types.ObjectId(id)) }
+    }).populate('propertyId');
+
+    let pendingRentCurrentMonth = 0;
+    const pendingRentDetails = [];
+
+    tenants.forEach(tenant => {
+      if (tenant.rentStatus === 'pending' && tenant.propertyId) {
+        const rentAmount = tenant.propertyId.monthlyRent || tenant.propertyId.rent?.monthlyRent || 0;
+        pendingRentCurrentMonth += rentAmount;
+        pendingRentDetails.push({
+          property: tenant.propertyId.shopName || 'N/A',
+          propertyNumber: tenant.propertyId.shopNumber || 'N/A',
+          tenant: tenant.name || 'N/A',
+          amount: rentAmount
+        });
+      }
+    });
+
+    // Net Profit/Loss
+    const netAmount = totalEarnings - totalSpends;
+
+    res.json({
+      success: true,
+      data: {
+        period: {
+          year: currentYear,
+          month: currentMonth,
+          monthName: new Date(currentYear, currentMonth - 1, 1).toLocaleString('default', { month: 'long' })
+        },
+        earnings: {
+          total: totalEarnings,
+          byType: earningsByType,
+          count: payments.length
+        },
+        spends: {
+          total: totalSpends,
+          paid: paidSpends,
+          pending: pendingSpends,
+          count: maintenanceRecords.length
+        },
+        pendingRent: {
+          total: pendingRentCurrentMonth,
+          count: pendingRentDetails.length,
+          details: pendingRentDetails
+        },
+        netAmount: netAmount,
+        profitMargin: totalEarnings > 0 ? ((netAmount / totalEarnings) * 100).toFixed(2) : 0
+      }
+    });
+  } catch (error) {
+    myLogModule.error('Get analytics error: ' + error);
+    res.status(500).json({ error: true, message: 'Error fetching analytics', details: error.message });
   }
 };
 
