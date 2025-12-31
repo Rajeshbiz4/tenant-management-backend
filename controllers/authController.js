@@ -67,7 +67,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: true, message: 'User already exists with this email' });
     }
 
-    const user = new User({ name, email, password });
+    const user = new User({ name, email, password, propertyName });
     await user.save();
 
     const token = generateToken(user._id);

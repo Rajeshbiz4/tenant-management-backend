@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Payment = require('../models/Payment');
 const Property = require('../models/Property');
 const Tenant = require('../models/Tenant');
@@ -193,10 +194,39 @@ exports.makePayment = async (req, res) => {
  */
 exports.getPayments = async (req, res) => {
   try {
+    const userId = req.user.userId;
     const { propertyId, tenantId, month, year, type } = req.query;
-    const filter = {};
+    
+    // Get user's properties to filter payments
+    const userProperties = await Property.find({ userId });
+    const userPropertyIds = userProperties.map(p => p._id.toString());
+    
+    // If user has no properties, return empty array
+    if (userPropertyIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'Payments fetched successfully',
+        data: []
+      });
+    }
+    
+    const filter = {
+      property: { $in: userProperties.map(p => p._id) } // Only payments for user's properties
+    };
 
-    if (propertyId) filter.property = propertyId;
+    if (propertyId) {
+      // Check if the property belongs to the user
+      if (userPropertyIds.includes(propertyId)) {
+        filter.property = new mongoose.Types.ObjectId(propertyId);
+      } else {
+        // Property doesn't belong to user, return empty
+        return res.status(200).json({
+          success: true,
+          message: 'Payments fetched successfully',
+          data: []
+        });
+      }
+    }
     if (tenantId) filter.tenant = tenantId;
     if (month) filter.month = parseInt(month);
     if (year) filter.year = parseInt(year);
