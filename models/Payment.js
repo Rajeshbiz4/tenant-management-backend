@@ -8,6 +8,7 @@ const paymentSchema = new mongoose.Schema({
     enum: ['rent', 'maintenance', 'light', 'advance'],
     required: true,
   },
+  rentMonth: { type: Number, min: 1, max: 12 }, // 1-12 for Jan-Dec
   amount: { type: Number, required: true },
   paidOn: { type: Date, required: true, default: Date.now },
   month: { type: Number, min: 1, max: 12 }, // optional, useful for monthly reports
