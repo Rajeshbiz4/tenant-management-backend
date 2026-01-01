@@ -321,3 +321,133 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /auth/profile:
+ *   put:
+ *     summary: Update user profile
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john@example.com
+ *               propertyName:
+ *                 type: string
+ *                 example: Sunshine Apartments
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+// Update Profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, email, propertyName } = req.body;
+
+    // Validation
+    if (!name || !email || !propertyName) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Name, email, and property name are required' 
+      });
+    }
+
+    if (name.trim().length < 2) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Name must be at least 2 characters' 
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Please enter a valid email address' 
+      });
+    }
+
+    if (propertyName.trim().length < 2) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Property name must be at least 2 characters' 
+      });
+    }
+
+    // Check if email is already taken by another user
+    const existingUser = await User.findOne({ 
+      email: email.toLowerCase(), 
+      _id: { $ne: userId } 
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Email is already taken by another user' 
+      });
+    }
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        propertyName: propertyName.trim(),
+        updatedAt: new Date()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ 
+        error: true, 
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        user: {
+          id: updatedUser._id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          propertyName: updatedUser.propertyName,
+          createdAt: updatedUser.createdAt,
+          updatedAt: updatedUser.updatedAt
+        }
+      }
+    });
+  } catch (error) {
+    myLogModule.error('Update profile error: ' + error);
+    res.status(500).json({ 
+      error: true, 
+      message: 'Error updating profile', 
+      details: error.message 
+    });
+  }
+};
+

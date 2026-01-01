@@ -297,12 +297,17 @@ exports.getYearlyStats = async (req, res) => {
 // Analytics Stats - Earnings, Spends, Pending Rent
 exports.getAnalytics = async (req, res) => {
   try {
+    console.log('Analytics API called with query:', req.query);
+    console.log('User ID:', req.user.userId);
+    
     const userId = req.user.userId;
     const { year, month, propertyId } = req.query;
 
     // Get user's properties
     const properties = await Property.find({ userId });
     const propertyIds = properties.map(p => p._id.toString());
+    
+    console.log('Found properties:', properties.length, 'Property IDs:', propertyIds);
 
     // If no properties, return empty analytics
     if (propertyIds.length === 0) {
@@ -353,31 +358,23 @@ exports.getAnalytics = async (req, res) => {
       maintenanceFilter.property = new mongoose.Types.ObjectId(propertyId);
     }
 
+    // Set default to current month if no year/month specified
+    const currentDate = new Date();
+    const currentYear = year ? parseInt(year) : currentDate.getFullYear();
+    const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+
     // Filter by year/month for payments
-    if (year) {
-      paymentFilter.year = parseInt(year);
-      if (month) {
-        paymentFilter.month = parseInt(month);
-      }
-    } else {
-      // Default to current month if no year specified
-      const now = new Date();
-      paymentFilter.year = now.getFullYear();
-      paymentFilter.month = now.getMonth() + 1;
+    paymentFilter.year = currentYear;
+    if (month) {
+      paymentFilter.month = currentMonth;
     }
 
     // Filter by year/month for maintenance (using activityDate)
-    if (year) {
-      const startDate = new Date(parseInt(year), month ? parseInt(month) - 1 : 0, 1);
-      const endDate = new Date(parseInt(year), month ? parseInt(month) : 12, 0, 23, 59, 59);
-      maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
-    } else {
-      // Default to current month
-      const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
-    }
+    const startDate = new Date(currentYear, month ? currentMonth - 1 : 0, 1);
+    const endDate = month 
+      ? new Date(currentYear, currentMonth, 0, 23, 59, 59)
+      : new Date(currentYear, 12, 0, 23, 59, 59);
+    maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
 
     // Calculate Total Earnings from Payments
     const payments = await Payment.find(paymentFilter);
@@ -402,10 +399,6 @@ exports.getAnalytics = async (req, res) => {
       .reduce((sum, m) => sum + (m.amount || 0), 0);
 
     // Calculate Pending Rent for Current Month
-    const currentDate = new Date();
-    const currentYear = year ? parseInt(year) : currentDate.getFullYear();
-    const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
-
     const tenants = await Tenant.find({
       propertyId: { $in: propertyIds.map(id => new mongoose.Types.ObjectId(id)) }
     }).populate('propertyId');
@@ -428,34 +421,37 @@ exports.getAnalytics = async (req, res) => {
 
     // Net Profit/Loss
     const netAmount = totalEarnings - totalSpends;
+    const profitMargin = totalEarnings > 0 ? ((netAmount / totalEarnings) * 100).toFixed(2) : 0;
+
+    const responseData = {
+      period: {
+        year: currentYear,
+        month: currentMonth,
+        monthName: new Date(currentYear, currentMonth - 1, 1).toLocaleString('default', { month: 'long' })
+      },
+      earnings: {
+        total: totalEarnings,
+        byType: earningsByType,
+        count: payments.length
+      },
+      spends: {
+        total: totalSpends,
+        paid: paidSpends,
+        pending: pendingSpends,
+        count: maintenanceRecords.length
+      },
+      pendingRent: {
+        total: pendingRentCurrentMonth,
+        count: pendingRentDetails.length,
+        details: pendingRentDetails
+      },
+      netAmount: netAmount,
+      profitMargin: parseFloat(profitMargin)
+    };
 
     res.json({
       success: true,
-      data: {
-        period: {
-          year: currentYear,
-          month: currentMonth,
-          monthName: new Date(currentYear, currentMonth - 1, 1).toLocaleString('default', { month: 'long' })
-        },
-        earnings: {
-          total: totalEarnings,
-          byType: earningsByType,
-          count: payments.length
-        },
-        spends: {
-          total: totalSpends,
-          paid: paidSpends,
-          pending: pendingSpends,
-          count: maintenanceRecords.length
-        },
-        pendingRent: {
-          total: pendingRentCurrentMonth,
-          count: pendingRentDetails.length,
-          details: pendingRentDetails
-        },
-        netAmount: netAmount,
-        profitMargin: totalEarnings > 0 ? ((netAmount / totalEarnings) * 100).toFixed(2) : 0
-      }
+      data: responseData
     });
   } catch (error) {
     myLogModule.error('Get analytics error: ' + error);
