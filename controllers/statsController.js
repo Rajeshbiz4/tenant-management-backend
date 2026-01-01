@@ -297,9 +297,6 @@ exports.getYearlyStats = async (req, res) => {
 // Analytics Stats - Earnings, Spends, Pending Rent
 exports.getAnalytics = async (req, res) => {
   try {
-    console.log('Analytics API called with query:', req.query);
-    console.log('User ID:', req.user.userId);
-    
     const userId = req.user.userId;
     const { year, month, propertyId } = req.query;
 
@@ -307,7 +304,21 @@ exports.getAnalytics = async (req, res) => {
     const properties = await Property.find({ userId });
     const propertyIds = properties.map(p => p._id.toString());
     
-    console.log('Found properties:', properties.length, 'Property IDs:', propertyIds);
+    console.log('User ID:', userId);
+    console.log('Found properties:', properties.length);
+    console.log('Property IDs:', propertyIds);
+    
+    // Debug: Check if there are any payments and maintenance records at all
+    const allPayments = await Payment.find({});
+    const allMaintenance = await Maintenance.find({});
+    console.log('Total payments in DB:', allPayments.length);
+    console.log('Total maintenance in DB:', allMaintenance.length);
+    
+    // Debug: Check user-specific records
+    const userPayments = await Payment.find({ property: { $in: propertyIds.map(id => new mongoose.Types.ObjectId(id)) } });
+    const userMaintenance = await Maintenance.find({ userId });
+    console.log('User payments:', userPayments.length);
+    console.log('User maintenance:', userMaintenance.length);
 
     // If no properties, return empty analytics
     if (propertyIds.length === 0) {
@@ -362,22 +373,34 @@ exports.getAnalytics = async (req, res) => {
     const currentDate = new Date();
     const currentYear = year ? parseInt(year) : currentDate.getFullYear();
     const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+    
+    // Determine if this is an all-time request (no filters)
+    const isAllTimeRequest = !year && !month;
 
-    // Filter by year/month for payments
-    paymentFilter.year = currentYear;
-    if (month) {
-      paymentFilter.month = currentMonth;
+    // Filter by year/month for payments (if specified)
+    if (year) {
+      paymentFilter.year = currentYear;
+      if (month) {
+        paymentFilter.month = currentMonth;
+      }
     }
+    // If no year/month specified, get all payments (no date filter)
 
-    // Filter by year/month for maintenance (using activityDate)
-    const startDate = new Date(currentYear, month ? currentMonth - 1 : 0, 1);
-    const endDate = month 
-      ? new Date(currentYear, currentMonth, 0, 23, 59, 59)
-      : new Date(currentYear, 12, 0, 23, 59, 59);
-    maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
+    // Filter by year/month for maintenance (using activityDate) (if specified)
+    if (year) {
+      const startDate = new Date(currentYear, month ? currentMonth - 1 : 0, 1);
+      const endDate = month 
+        ? new Date(currentYear, currentMonth, 0, 23, 59, 59)
+        : new Date(currentYear, 12, 0, 23, 59, 59);
+      maintenanceFilter.activityDate = { $gte: startDate, $lte: endDate };
+    }
+    // If no year/month specified, get all maintenance records (no date filter)
 
     // Calculate Total Earnings from Payments
+    console.log('Payment Filter:', JSON.stringify(paymentFilter));
     const payments = await Payment.find(paymentFilter);
+    console.log('Found payments:', payments.length);
+    
     const totalEarnings = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
     
     // Breakdown by type
@@ -389,7 +412,10 @@ exports.getAnalytics = async (req, res) => {
     };
 
     // Calculate Total Spends from Maintenance
+    console.log('Maintenance Filter:', JSON.stringify(maintenanceFilter));
     const maintenanceRecords = await Maintenance.find(maintenanceFilter);
+    console.log('Found maintenance records:', maintenanceRecords.length);
+    
     const totalSpends = maintenanceRecords.reduce((sum, m) => sum + (m.amount || 0), 0);
     const paidSpends = maintenanceRecords
       .filter(m => m.status === 'paid')
@@ -448,6 +474,15 @@ exports.getAnalytics = async (req, res) => {
       netAmount: netAmount,
       profitMargin: parseFloat(profitMargin)
     };
+
+    console.log('Analytics Response Data:', {
+      totalEarnings,
+      totalSpends,
+      paymentsCount: payments.length,
+      maintenanceCount: maintenanceRecords.length,
+      pendingRentCurrentMonth,
+      netAmount
+    });
 
     res.json({
       success: true,
